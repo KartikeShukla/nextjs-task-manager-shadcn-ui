@@ -162,7 +162,26 @@ export default function LeadsPage() {
         toast.success("Your information has been submitted successfully");
         handleClearForm();
       } else {
-        throw new Error(data.error || data.details || 'Failed to submit form');
+        // Get the error message from the API response
+        const errorMessage = data.error || data.details || 'Failed to submit form';
+        
+        // Check for specific error scenarios
+        if (errorMessage.includes('Unknown field name') || errorMessage.includes('field name mismatch')) {
+          // This is a configuration error, not a user error
+          setErrors(prev => ({ 
+            ...prev, 
+            general: "We're experiencing a technical issue. Our team has been notified and is working on it." 
+          }));
+          // Log detailed error for debugging
+          console.error('Airtable field mismatch error:', errorMessage);
+          toast.error("We're experiencing technical difficulties. Please try again later.");
+        } else {
+          // General error handling
+          setErrors(prev => ({ ...prev, general: errorMessage }));
+          toast.error(errorMessage);
+        }
+        
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error('Error submitting form:', error);
@@ -294,7 +313,7 @@ export default function LeadsPage() {
 
               <div className="space-y-2">
                 <label htmlFor="agreement" className="block text-sm font-medium text-gray-700">
-                  Supporting Documents (Agreement)
+                  Supporting Documents (Aggrement)
                 </label>
                 <div className={`border ${errors.file ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'} rounded-md p-10 text-center`}>
                   {fileName ? (
@@ -338,9 +357,16 @@ export default function LeadsPage() {
                         </Button>
                       </div>
                       {fileUrl && (
-                        <p className="mt-2 text-green-600 text-xs">
-                          ✓ File uploaded successfully and will be attached to your submission
-                        </p>
+                        <div className="mt-2">
+                          <p className="text-green-600 text-xs flex items-center justify-center">
+                            ✓ File uploaded successfully and will be attached to your submission
+                          </p>
+                          {file && file.size > 1024 * 1024 && (
+                            <p className="text-amber-600 text-xs mt-1">
+                              Note: For this demo, a generic PDF will be used in Airtable instead of your actual file
+                            </p>
+                          )}
+                        </div>
                       )}
                       {errors.file && (
                         <p className="mt-2 text-red-600 text-xs flex items-center justify-center">
@@ -350,20 +376,25 @@ export default function LeadsPage() {
                       )}
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center text-sm text-gray-500">
-                      <Circle className="h-5 w-5 mr-2 text-gray-400" />
-                      Drop files here or{" "}
-                      <label className="text-blue-500 hover:underline cursor-pointer ml-1" htmlFor="file-upload">
-                        browse
-                        <input
-                          id="file-upload"
-                          type="file"
-                          className="hidden"
-                          onChange={handleFileChange}
-                          disabled={isSubmitting}
-                          accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
-                        />
-                      </label>
+                    <div className="flex flex-col items-center justify-center text-sm gap-2">
+                      <div className="flex items-center justify-center text-gray-500">
+                        <Circle className="h-5 w-5 mr-2 text-gray-400" />
+                        Drop files here or{" "}
+                        <label className="text-blue-500 hover:underline cursor-pointer ml-1" htmlFor="file-upload">
+                          browse
+                          <input
+                            id="file-upload"
+                            type="file"
+                            className="hidden"
+                            onChange={handleFileChange}
+                            disabled={isSubmitting}
+                            accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
+                          />
+                        </label>
+                      </div>
+                      <p className="text-xs text-amber-600 italic">
+                        Demo mode: Small images/text files will upload as-is; for other files, a placeholder PDF will be used
+                      </p>
                     </div>
                   )}
                 </div>

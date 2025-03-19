@@ -101,9 +101,9 @@ export async function POST(request: Request) {
 
     // Add file attachment if provided
     if (fileUrl) {
-      console.log('Adding attachment to Agreement field:', { url: fileUrl, filename: fileName || 'document.pdf' });
+      console.log('Adding attachment to Aggrement field:', { url: fileUrl, filename: fileName || 'document.pdf' });
       
-      recordData['Agreement'] = [
+      recordData['Aggrement'] = [
         {
           url: fileUrl,
           filename: fileName || 'document.pdf'
@@ -147,6 +147,15 @@ export async function POST(request: Request) {
             details: 'Airtable rate limit exceeded'
           },
           { status: 429 }
+        );
+      } else if (errorMessage.includes('Unknown field name')) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'There is a field name mismatch. Error: ' + errorMessage,
+            details: 'Field name mismatch in Airtable'
+          },
+          { status: 422 }
         );
       } else {
         throw airtableError; // Re-throw to be caught by outer catch block
