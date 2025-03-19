@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RotateCcw, Circle, Loader2 } from "lucide-react";
+import { RotateCcw, Circle, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 export default function LeadsPage() {
@@ -14,6 +14,42 @@ export default function LeadsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  const uploadFile = async () => {
+    if (!file) return null;
+    
+    setIsUploading(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'File upload failed');
+      }
+      
+      setFileUrl(data.url);
+      return {
+        url: data.url,
+        fileName: data.fileName
+      };
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast.error('Failed to upload file. Please try again.');
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +62,23 @@ export default function LeadsPage() {
     setIsSubmitting(true);
     
     try {
-      // For now, just handle the basic form data without actual file upload
+      let fileData = null;
+      
+      // Upload file if selected but not yet uploaded
+      if (file && !fileUrl) {
+        fileData = await uploadFile();
+        if (!fileData) {
+          setIsSubmitting(false);
+          return;
+        }
+      } else if (file && fileUrl) {
+        fileData = {
+          url: fileUrl,
+          fileName: file.name
+        };
+      }
+      
+      // Submit form data with file URL if available
       const response = await fetch('/api/leads', {
         method: 'POST',
         headers: {
@@ -36,6 +88,10 @@ export default function LeadsPage() {
           name,
           email,
           caseDescription,
+          ...(fileData ? {
+            fileUrl: fileData.url,
+            fileName: fileData.fileName
+          } : {})
         }),
       });
 
@@ -60,6 +116,7 @@ export default function LeadsPage() {
     if (selectedFile) {
       setFile(selectedFile);
       setFileName(selectedFile.name);
+      setFileUrl(null); // Reset file URL when a new file is selected
     }
   };
 
@@ -69,6 +126,7 @@ export default function LeadsPage() {
     setCaseDescription("");
     setFile(null);
     setFileName(null);
+    setFileUrl(null);
   };
 
   return (
@@ -139,18 +197,47 @@ export default function LeadsPage() {
                   {fileName ? (
                     <div className="flex flex-col items-center justify-center text-sm">
                       <p className="mb-2">File selected: <span className="font-medium">{fileName}</span></p>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          setFile(null);
-                          setFileName(null);
-                        }}
-                        disabled={isSubmitting}
-                      >
-                        Remove file
-                      </Button>
+                      <div className="flex space-x-3">
+                        {!fileUrl && (
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm"
+                            onClick={uploadFile}
+                            disabled={isSubmitting || isUploading}
+                          >
+                            {isUploading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Upload
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setFile(null);
+                            setFileName(null);
+                            setFileUrl(null);
+                          }}
+                          disabled={isSubmitting || isUploading}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                      {fileUrl && (
+                        <p className="mt-2 text-green-600 text-xs">
+                          ✓ File uploaded successfully and will be attached to your submission
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center text-sm text-gray-500">
@@ -180,7 +267,7 @@ export default function LeadsPage() {
                   variant="ghost"
                   onClick={handleClearForm}
                   className="text-blue-500 hover:bg-transparent hover:text-blue-600 flex items-center p-0"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isUploading}
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Clear form
@@ -188,7 +275,7 @@ export default function LeadsPage() {
                 <Button 
                   type="submit"
                   className="bg-blue-700 hover:bg-blue-800"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isUploading}
                 >
                   {isSubmitting ? (
                     <>
