@@ -212,26 +212,26 @@ export default function LeadsPage() {
   };
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <div className="container max-w-4xl mx-auto py-12 px-4">
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Arbitration Institution Contact us page</h1>
-          <p className="text-gray-600 max-w-2xl mx-auto">
+    <div className="bg-gray-50">
+      <div className="container mx-auto py-8 px-4 sm:py-12 sm:px-6 lg:py-16">
+        <div className="text-center mb-8 sm:mb-10">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Contact Arbitration Institute</h1>
+          <p className="text-gray-600 max-w-2xl mx-auto text-sm sm:text-base">
             Please provide your contact information and case details below. 
             Our team will review your submission and get back to you promptly.
           </p>
         </div>
         
-        <div className="bg-white shadow-sm rounded-lg p-8">
-          {errors.general && (
-            <div className="mb-6 p-4 border border-red-200 bg-red-50 rounded-md text-red-600 flex items-start">
-              <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-              <div>{errors.general}</div>
-            </div>
-          )}
-          
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white shadow-sm rounded-lg p-4 sm:p-6 md:p-8">
+            {errors.general && (
+              <div className="mb-6 p-4 border border-red-200 bg-red-50 rounded-md text-red-600 flex items-start">
+                <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+                <div>{errors.general}</div>
+              </div>
+            )}
+            
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
               {/* Name field */}
               <div className="space-y-2">
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">
@@ -307,13 +307,13 @@ export default function LeadsPage() {
                 <label htmlFor="agreement" className="block text-sm font-medium text-gray-700">
                   Supporting Documents (Agreement)
                 </label>
-                <div className={`border ${errors.file ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'} rounded-md p-10 text-center`}>
+                <div className={`border ${errors.file ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'} rounded-md p-4 sm:p-6 lg:p-10 text-center`}>
                   {fileName ? (
                     <div className="flex flex-col items-center justify-center text-sm">
-                      <p className="mb-2">File selected: <span className="font-medium">{fileName}</span></p>
-                      <div className="mt-4 flex gap-2">
+                      <p className="mb-2 text-sm sm:text-base break-all">File selected: <span className="font-medium">{fileName}</span></p>
+                      <div className="mt-4 flex flex-wrap gap-2 justify-center">
                         {isUploading ? (
-                          <Button disabled className="gap-2">
+                          <Button disabled className="gap-2 w-full sm:w-auto">
                             <Loader2 className="h-4 w-4 animate-spin" />
                             Uploading...
                           </Button>
@@ -321,7 +321,7 @@ export default function LeadsPage() {
                           <Button 
                             type="button" 
                             variant="outline" 
-                            className="gap-2 text-green-600 border-green-200 bg-green-50 hover:bg-green-100 hover:text-green-700"
+                            className="gap-2 text-green-600 border-green-200 bg-green-50 hover:bg-green-100 hover:text-green-700 w-full sm:w-auto"
                             onClick={() => {
                               setFile(null);
                               setFileName(null);
@@ -337,7 +337,7 @@ export default function LeadsPage() {
                           <Button 
                             type="button" 
                             variant="outline" 
-                            className="gap-2"
+                            className="gap-2 w-full sm:w-auto"
                             onClick={() => uploadFile(file)}
                             disabled={isUploading || isSubmitting}
                           >
@@ -355,10 +355,10 @@ export default function LeadsPage() {
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-sm gap-2">
-                      <div className="flex items-center justify-center text-gray-500">
+                      <div className="flex items-center justify-center text-gray-500 flex-wrap">
                         <Circle className="h-5 w-5 mr-2 text-gray-400" />
-                        Drop files here or{" "}
-                        <label className="text-blue-500 hover:underline cursor-pointer ml-1" htmlFor="file-upload">
+                        <span className="mr-1">Drop files here or</span>
+                        <label className="text-blue-500 hover:underline cursor-pointer" htmlFor="file-upload">
                           browse
                           <input
                             id="file-upload"
@@ -370,7 +370,7 @@ export default function LeadsPage() {
                           />
                         </label>
                       </div>
-                      <p className="text-xs text-gray-600 italic">
+                      <p className="text-xs text-gray-600 italic max-w-md mx-auto">
                         Files will be securely stored and linked to your submission
                       </p>
                     </div>
@@ -388,12 +388,12 @@ export default function LeadsPage() {
               </div>
 
               {/* Form buttons */}
-              <div className="flex justify-between pt-4">
+              <div className="flex flex-col-reverse sm:flex-row justify-between gap-4 sm:gap-0 pt-4">
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={handleClearForm}
-                  className="text-blue-500 hover:bg-transparent hover:text-blue-600 flex items-center p-0"
+                  className="text-blue-500 hover:bg-transparent hover:text-blue-600 flex items-center justify-center sm:justify-start p-0"
                   disabled={isSubmitting || isUploading}
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
@@ -401,7 +401,7 @@ export default function LeadsPage() {
                 </Button>
                 <Button 
                   type="submit"
-                  className="bg-blue-700 hover:bg-blue-800"
+                  className="bg-blue-700 hover:bg-blue-800 w-full sm:w-auto"
                   disabled={isSubmitting || isUploading}
                 >
                   {isSubmitting ? (
@@ -414,8 +414,8 @@ export default function LeadsPage() {
                   )}
                 </Button>
               </div>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       </div>
     </div>
