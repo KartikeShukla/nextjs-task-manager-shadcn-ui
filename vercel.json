@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "env": {
+    "AIRTABLE_API_KEY": "patnlRlXaP7zgGgRA.f7cde836ab7af543321bb6a0767ed2b5da75e47793707c7281997d0c95282bea",
+    "AIRTABLE_BASE_ID": "appK5EcHFedzfsGsh",
+    "AIRTABLE_TABLE_NAME": "Leads"
+  }
+} 
