@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Scale, BookOpen, FileText, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 
 export default function HomePage() {
   return (
@@ -27,13 +28,10 @@ export default function HomePage() {
           </div>
           <div className="sm:w-1/2 flex justify-center sm:justify-end">
             <div className="w-full max-w-md">
-              <img 
+              <FallbackImage 
                 src="/images/arbitration.svg" 
                 alt="Arbitration Services Illustration" 
                 className="w-full"
-                onError={(e) => {
-                  e.currentTarget.src = "https://via.placeholder.com/500x400?text=Arbitration+Institute";
-                }} 
               />
             </div>
           </div>
