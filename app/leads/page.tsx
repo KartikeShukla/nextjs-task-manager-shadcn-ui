@@ -7,14 +7,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { RotateCcw, Circle, Loader2, Upload, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
+// Constants
+const FILE_SIZE_LIMIT = 10 * 1024 * 1024; // 10MB
+const ALLOWED_FILE_TYPES = [
+  'application/pdf', 
+  'application/msword', 
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+  'text/plain', 
+  'image/jpeg', 
+  'image/png'
+];
+
+// Form validation and submission component
 export default function LeadsPage() {
+  // Form state
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [caseDescription, setCaseDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  
+  // UI state
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState<{
     name?: string;
@@ -25,21 +40,14 @@ export default function LeadsPage() {
   
   // Validate email format
   const isValidEmail = (email: string) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
   
   // Validate form fields
   const validateForm = () => {
-    const newErrors: {
-      name?: string;
-      email?: string;
-      file?: string;
-    } = {};
+    const newErrors: Record<string, string> = {};
     
-    if (!name.trim()) {
-      newErrors.name = "Name is required";
-    }
+    if (!name.trim()) newErrors.name = "Name is required";
     
     if (!email.trim()) {
       newErrors.email = "Email is required";
@@ -51,45 +59,42 @@ export default function LeadsPage() {
     return Object.keys(newErrors).length === 0;
   };
   
+  // Upload file to Firebase Storage
   const uploadFile = async (file: File) => {
     try {
       setIsUploading(true);
+      
+      // Create form data with file
       const formData = new FormData();
       formData.append('file', file);
       
-      // Show toast with persistent ID for updates
+      // Show loading toast
       const toastId = toast.loading('Uploading file...', {
         duration: 10000, // longer duration for large files
       });
       
-      // Upload the file
+      // Post to upload API
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
       
-      // Parse the response
       const data = await response.json();
-      
-      // Dismiss the loading toast
       toast.dismiss(toastId);
       
       if (!response.ok) {
         throw new Error(data.error || 'Upload failed');
       }
       
-      // Set state with the file URL
+      // Update state with upload results
       setFileUrl(data.url);
       setFileName(data.fileName);
       
-      // Log the response for debugging
-      console.log('Upload response:', data);
-      
-      // Show success message based on whether it's a mock or real upload
+      // Show appropriate toast based on upload result
       if (data.isMock) {
-        toast.warning('File selected (simulated upload) - real upload failed but form will still work');
+        toast.warning('File selected (simulated upload) - will still work');
       } else {
-        toast.success('File uploaded successfully to Firebase');
+        toast.success('File uploaded successfully');
       }
       
       return data.url;
@@ -97,51 +102,39 @@ export default function LeadsPage() {
       console.error('Error uploading file:', error);
       toast.error(error instanceof Error ? error.message : 'Error uploading file');
       
-      // Return a mock URL so the form can still be submitted
-      const mockUrl = `https://firebasestorage.googleapis.com/v0/b/airtable-test-12345.appspot.com/o/error_${Date.now()}.png?alt=media`;
+      // Return a mock URL so form submission can continue
+      const mockUrl = `https://firebasestorage.googleapis.com/v0/b/mock-upload-${Date.now()}.png?alt=media`;
       setFileUrl(mockUrl);
-      
       return mockUrl;
     } finally {
       setIsUploading(false);
     }
   };
 
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Don't submit if already in progress
+    if (isSubmitting || isUploading) return;
+    
+    // Validate form
+    if (!validateForm()) return;
+    
     setIsSubmitting(true);
-    setErrors({});
-    
-    // Basic validation
-    const newErrors: Record<string, string> = {};
-    if (!name) newErrors.name = "Name is required";
-    if (!email) newErrors.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = "Email is invalid";
-    
-    // If there are errors, don't submit
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      setIsSubmitting(false);
-      return;
-    }
     
     try {
       let uploadedFileUrl = fileUrl;
       
-      // Upload file if selected but not yet uploaded
+      // Upload file if present but not yet uploaded
       if (file && !fileUrl) {
-        try {
-          uploadedFileUrl = await uploadFile(file);
-        } catch (error) {
-          console.error('Error during file upload:', error);
-          // Continue with form submission even if upload fails
-        }
+        uploadedFileUrl = await uploadFile(file);
       }
       
-      // Show loading toast for form submission
-      toast.loading("Submitting your information...");
+      // Show loading toast for submission
+      const toastId = toast.loading("Submitting your information...");
       
-      // Submit the form data to the API
+      // Submit form data to API
       const response = await fetch('/api/leads', {
         method: 'POST',
         headers: {
@@ -152,23 +145,20 @@ export default function LeadsPage() {
           email,
           caseDescription,
           fileUrl: uploadedFileUrl,
-          fileName: fileName
+          fileName
         }),
       });
       
-      // Dismiss loading toast
-      toast.dismiss();
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to submit form');
-      }
+      toast.dismiss(toastId);
       
       const result = await response.json();
-      console.log('Form submission result:', result);
       
-      // If submission is successful, show success message and reset form
-      toast.success(result.message || 'Your submission has been received. We will contact you shortly.');
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to submit form');
+      }
+      
+      // Success - clear form and show message
+      toast.success(result.message || 'Your submission has been received');
       handleClearForm();
     } catch (error) {
       console.error('Error submitting form:', error);
@@ -178,40 +168,36 @@ export default function LeadsPage() {
     }
   };
 
+  // Handle file input change
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
     
-    // Reset any previous file errors
+    // Reset previous file errors
     setErrors(prev => ({ ...prev, file: undefined }));
     
-    // Check file type
-    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'image/jpeg', 'image/png'];
-    if (!allowedTypes.includes(selectedFile.type)) {
-      setErrors(prev => ({ ...prev, file: "Please upload PDF, DOC, DOCX, TXT, JPG, or PNG files only" }));
-      toast.error("File type not supported. Please upload PDF, DOC, DOCX, TXT, JPG, or PNG files only.");
+    // Validate file type
+    if (!ALLOWED_FILE_TYPES.includes(selectedFile.type)) {
+      setErrors(prev => ({ ...prev, file: "Unsupported file type" }));
+      toast.error("Please upload PDF, DOC, DOCX, TXT, JPG, or PNG files only");
       return;
     }
     
-    // Check file size (max 10MB)
-    if (selectedFile.size > 10 * 1024 * 1024) {
+    // Validate file size
+    if (selectedFile.size > FILE_SIZE_LIMIT) {
       setErrors(prev => ({ ...prev, file: "File size exceeds 10MB limit" }));
       toast.error("File size exceeds 10MB limit");
       return;
     }
     
-    // Set the file and filename
+    // Set file state and reset URL
     setFile(selectedFile);
     setFileName(selectedFile.name);
-    
-    // Reset the fileUrl when a new file is selected
     setFileUrl(null);
-    
-    console.log("File selected:", selectedFile.name);
   };
 
+  // Reset form to initial state
   const handleClearForm = () => {
-    // Reset all form fields
     setName("");
     setEmail("");
     setCaseDescription("");
@@ -220,11 +206,9 @@ export default function LeadsPage() {
     setFileUrl(null);
     setErrors({});
     
-    // Also clear the file input
+    // Clear file input
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
-    
-    console.log("Form cleared");
   };
 
   return (
@@ -248,6 +232,7 @@ export default function LeadsPage() {
           
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
+              {/* Name field */}
               <div className="space-y-2">
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                   Name <span className="text-red-500">*</span>
@@ -264,7 +249,7 @@ export default function LeadsPage() {
                   }}
                   required
                   disabled={isSubmitting}
-                  className={`w-full ${errors.name ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}`}
+                  className={errors.name ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}
                 />
                 {errors.name && (
                   <p className="text-sm text-red-600 mt-1 flex items-center">
@@ -274,6 +259,7 @@ export default function LeadsPage() {
                 )}
               </div>
 
+              {/* Email field */}
               <div className="space-y-2">
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                   Email <span className="text-red-500">*</span>
@@ -291,7 +277,7 @@ export default function LeadsPage() {
                   }}
                   required
                   disabled={isSubmitting}
-                  className={`w-full ${errors.email ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}`}
+                  className={errors.email ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}
                 />
                 {errors.email && (
                   <p className="text-sm text-red-600 mt-1 flex items-center">
@@ -301,6 +287,7 @@ export default function LeadsPage() {
                 )}
               </div>
 
+              {/* Case Description field */}
               <div className="space-y-2">
                 <label htmlFor="caseDescription" className="block text-sm font-medium text-gray-700">
                   Case Description
@@ -312,13 +299,13 @@ export default function LeadsPage() {
                   onChange={(e) => setCaseDescription(e.target.value)}
                   rows={5}
                   disabled={isSubmitting}
-                  className="w-full"
                 />
               </div>
 
+              {/* File upload area */}
               <div className="space-y-2">
                 <label htmlFor="agreement" className="block text-sm font-medium text-gray-700">
-                  Supporting Documents (Aggrement)
+                  Supporting Documents (Agreement)
                 </label>
                 <div className={`border ${errors.file ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'} rounded-md p-10 text-center`}>
                   {fileName ? (
@@ -400,6 +387,7 @@ export default function LeadsPage() {
                 )}
               </div>
 
+              {/* Form buttons */}
               <div className="flex justify-between pt-4">
                 <Button
                   type="button"

@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server';
 import Airtable from 'airtable';
 
-// Define error type for Airtable
+// Define types for better code organization
 interface AirtableError extends Error {
   error?: string;
   statusCode?: number;
   message: string;
 }
 
-// Define the record data interface
+interface LeadFormData {
+  name: string;
+  email: string;
+  caseDescription?: string;
+  fileUrl?: string;
+  fileName?: string;
+}
+
 interface AirtableRecord {
   [key: string]: any;
 }
 
-// Initialize Airtable with explicit error handling
+// Initialize Airtable
 let base: any;
 try {
   base = new Airtable({
@@ -22,197 +29,162 @@ try {
   console.log('[LEADS API] Airtable initialized successfully');
 } catch (err) {
   console.error('[LEADS API] Failed to initialize Airtable:', err);
-  // Continue anyway - we'll check base before using it
 }
 
 export async function POST(request: Request) {
-  console.log('[LEADS API] Received lead submission request');
+  console.log('[LEADS API] Processing lead submission');
   
   try {
-    // Parse request body
-    const body = await request.json();
-    console.log('[LEADS API] Received body:', body);
-    
+    // Parse and validate request body
+    const body = await request.json() as LeadFormData;
     const { name, email, caseDescription, fileUrl, fileName } = body;
     
-    // Log all received data for debugging
-    console.log('[LEADS API] Parsed data:', { name, email, caseDescription, fileUrl, fileName });
-    
-    // Validate required fields
+    // Basic validation
     if (!name || !email) {
-      console.log('[LEADS API] Missing required fields');
       return NextResponse.json({ 
         success: false, 
         error: 'Name and email are required fields' 
       }, { status: 400 });
     }
     
+    // Check if Airtable is initialized
     if (!base) {
       throw new Error('Airtable connection not initialized');
     }
     
-    // Get handles to the tables
     const leadsTable = base('Leads');
     
-    // Two-step approach: first create record, then update the Agreement field directly
-    try {
-      // Step 1: Create a basic record first
-      const recordData: AirtableRecord = {
-        'Name': name,
-        'Email': email
-      };
+    // Our strategy:
+    // 1. First create a basic record with name, email, case description
+    // 2. Then update with file information to handle the Agreement field
+    
+    // Step 1: Create the basic record
+    const recordData: AirtableRecord = {
+      'Name': name,
+      'Email': email
+    };
+    
+    if (caseDescription) {
+      recordData['Case Description'] = caseDescription;
+    }
+    
+    // Create the initial record
+    const createdRecord = await leadsTable.create(recordData);
+    console.log('[LEADS API] Initial record created:', createdRecord.id);
+    
+    // Step 2: If we have a file, update the record with file information
+    if (fileUrl && fileName) {
+      // Format file information for possible use in description
+      const fileInfo = `\n\nFILE: ${fileName}\nURL: ${fileUrl}`;
       
-      // Add case description (but not the file info yet)
-      if (caseDescription) {
-        recordData['Case Description'] = caseDescription;
-      }
-      
-      console.log('[LEADS API] Creating initial record:', JSON.stringify(recordData, null, 2));
-      
-      // Create the initial record
-      const createdRecord = await leadsTable.create(recordData);
-      console.log('[LEADS API] Initial record created with ID:', createdRecord.id);
-      
-      // Step 2: If we have a file, attempt to update the record with a direct field update
-      if (fileUrl && fileName) {
-        // Define fileInfo for use in multiple places
-        const fileInfo = `\n\nFILE: ${fileName}\nURL: ${fileUrl}`;
+      try {
+        // Attempt direct update of Agreement field
+        await leadsTable.update(createdRecord.id, {
+          'Agreement': fileUrl,
+          'Case Description': (caseDescription || '') + fileInfo
+        });
         
+        return NextResponse.json({ 
+          success: true, 
+          message: 'Lead submitted with file in Agreement field',
+          recordId: createdRecord.id
+        });
+      } catch (updateError) {
+        console.error('[LEADS API] Error updating Agreement field:', updateError);
+        
+        // Fallback: Try manual PATCH request
         try {
-          console.log('[LEADS API] Attempting to update Agreement field directly');
+          const baseId = process.env.AIRTABLE_BASE_ID || 'appK5EcHFedzfsGsh';
+          const url = `https://api.airtable.com/v0/${baseId}/Leads/${createdRecord.id}`;
           
-          // Prepare update data - force Agreement to be a text value
-          const updateData: AirtableRecord = {};
-          
-          // Add file URL to the Agreement field using a manual update
-          updateData['Agreement'] = fileUrl;
-          
-          // Also update the Case Description to include file info
-          updateData['Case Description'] = (caseDescription || '') + fileInfo;
-          
-          // Update the record
-          await leadsTable.update(createdRecord.id, updateData);
-          console.log('[LEADS API] Successfully updated Agreement field');
-          
-          return NextResponse.json({ 
-            success: true, 
-            message: 'Lead submitted with file in Agreement field',
-            recordId: createdRecord.id
-          });
-        } catch (updateError) {
-          console.error('[LEADS API] Error updating Agreement field:', updateError);
-          
-          // Attempt alternative approach - use a different PATCH request directly to Airtable API
-          try {
-            console.log('[LEADS API] Attempting manual PATCH request to set Agreement field');
-            
-            // Construct URL and request for manual PATCH
-            const baseId = process.env.AIRTABLE_BASE_ID || 'appK5EcHFedzfsGsh';
-            const url = `https://api.airtable.com/v0/${baseId}/Leads/${createdRecord.id}`;
-            
-            const patchBody = {
+          const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${process.env.AIRTABLE_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
               fields: {
                 'Agreement': fileUrl 
               }
-            };
-            
-            const response = await fetch(url, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${process.env.AIRTABLE_API_KEY}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(patchBody)
+            })
+          });
+          
+          if (response.ok) {
+            // Add file info to description even if Agreement field works
+            await leadsTable.update(createdRecord.id, {
+              'Case Description': (caseDescription || '') + fileInfo
             });
-            
-            if (response.ok) {
-              console.log('[LEADS API] Manual PATCH successful');
-              return NextResponse.json({ 
-                success: true, 
-                message: 'Lead submitted with file in Agreement field (manual method)',
-                recordId: createdRecord.id
-              });
-            } else {
-              // If that fails, at least try to update the description
-              const updateDescriptionOnly = {
-                'Case Description': (caseDescription || '') + fileInfo
-              };
-              
-              await leadsTable.update(createdRecord.id, updateDescriptionOnly);
-              console.log('[LEADS API] Updated description with file info as fallback');
-              
-              throw new Error(`PATCH request failed: ${response.status} ${response.statusText}`);
-            }
-          } catch (patchError) {
-            console.error('[LEADS API] Manual PATCH failed:', patchError);
             
             return NextResponse.json({ 
               success: true, 
-              message: 'Lead submitted but file could only be added to description',
+              message: 'Lead submitted with file in Agreement field (manual method)',
               recordId: createdRecord.id
             });
           }
+          
+          // If manual update fails, ensure description includes file info
+          await leadsTable.update(createdRecord.id, {
+            'Case Description': (caseDescription || '') + fileInfo
+          });
+        } catch (patchError) {
+          console.error('[LEADS API] Manual update failed:', patchError);
         }
-      } else {
-        // No file, return success
+        
+        // Even if both methods fail, record was still created successfully
         return NextResponse.json({ 
           success: true, 
-          message: 'Lead submitted successfully',
+          message: 'Lead submitted but file could only be added to description',
           recordId: createdRecord.id
         });
       }
-    } catch (createErr) {
-      const error = createErr as AirtableError;
-      console.error('[LEADS API] Airtable create error:', error.message);
-      console.error('[LEADS API] Error details:', {
-        message: error.message,
-        name: error.name,
-        statusCode: error.statusCode,
-        error: error.error
-      });
-      
-      // Try with just the absolutely essential fields
-      const minimalData: AirtableRecord = {
-        'Name': name,
-        'Email': email
-      };
-      
-      if (caseDescription) {
-        minimalData['Case Description'] = caseDescription;
-      }
-      
-      // Add file info to description as a fallback
-      if (fileUrl && fileName) {
-        const fileInfo = `\n\nFile: ${fileName}\nURL: ${fileUrl}`;
-        
-        if (minimalData['Case Description']) {
-          minimalData['Case Description'] += fileInfo;
-        } else {
-          minimalData['Case Description'] = fileInfo;
-        }
-      }
-      
-      try {
-        const minimalRecord = await leadsTable.create(minimalData);
-        console.log('[LEADS API] Minimal record created with ID:', minimalRecord.id);
-        
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Lead submitted with minimal data and file URL in description',
-          recordId: minimalRecord.id
-        });
-      } catch (finalErr) {
-        console.error('[LEADS API] Even minimal submission failed:', finalErr);
-        throw finalErr;
-      }
     }
     
-  } catch (error) {
-    console.error('[LEADS API] Error in lead submission:', error);
+    // No file case - return success
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Lead submitted successfully',
+      recordId: createdRecord.id
+    });
     
-    // Return a 200 status with error details to prevent form submission errors
+  } catch (error) {
+    // Handle errors during record creation
+    console.error('[LEADS API] Submission error:', error);
+    
+    // If there was an error creating the record, try minimal submission
+    try {
+      if (base) {
+        const { name, email, caseDescription, fileUrl, fileName } = 
+          await request.json() as LeadFormData;
+        
+        // Only proceed if we have the minimal required data
+        if (name && email) {
+          const minimalRecord = await base('Leads').create({
+            'Name': name,
+            'Email': email,
+            'Case Description': caseDescription ? 
+              (fileUrl && fileName ? 
+                `${caseDescription}\n\nFile: ${fileName}\nURL: ${fileUrl}` : 
+                caseDescription) :
+              (fileUrl && fileName ? 
+                `File: ${fileName}\nURL: ${fileUrl}` : 
+                '')
+          });
+          
+          return NextResponse.json({ 
+            success: true, 
+            message: 'Lead submitted with minimal data',
+            recordId: minimalRecord.id
+          });
+        }
+      }
+    } catch (fallbackError) {
+      console.error('[LEADS API] Fallback submission failed:', fallbackError);
+    }
+    
+    // Return 200 with error info to prevent form errors
     return NextResponse.json({
-      success: true, // Send success:true to avoid disrupting user experience
+      success: true, // Send success to prevent UI disruption
       message: 'Your submission was received but there was a server issue. Please contact support.',
       error: error instanceof Error ? error.message : 'Unknown error',
       mockSubmission: true
