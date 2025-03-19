@@ -1,5 +1,18 @@
 import { NextResponse } from 'next/server';
 
+// Allowed file types
+const ALLOWED_FILE_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'image/jpeg',
+  'image/png'
+];
+
+// Maximum file size (10MB)
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
 // In a real application, you would upload to a storage service like AWS S3,
 // Google Cloud Storage, or Cloudinary. For this demo, we'll simulate file upload.
 export async function POST(request: Request) {
@@ -10,7 +23,29 @@ export async function POST(request: Request) {
 
     if (!file) {
       return NextResponse.json(
-        { error: 'No file provided' },
+        { success: false, error: 'No file provided' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file type
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Invalid file type. Please upload PDF, DOC, DOCX, TXT, JPG, or PNG files only.' 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'File size exceeds the 10MB limit' 
+        },
         { status: 400 }
       );
     }
@@ -44,6 +79,7 @@ export async function POST(request: Request) {
     console.error('Error handling file upload:', error);
     return NextResponse.json(
       { 
+        success: false,
         error: 'File upload failed',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
