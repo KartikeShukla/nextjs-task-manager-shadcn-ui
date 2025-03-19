@@ -26,6 +26,8 @@ export default function LeadsPage() {
       const formData = new FormData();
       formData.append('file', file);
       
+      console.log("Uploading file:", file.name);
+      
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
@@ -37,7 +39,10 @@ export default function LeadsPage() {
         throw new Error(data.error || 'File upload failed');
       }
       
+      console.log("Upload successful:", data);
+      
       setFileUrl(data.url);
+      toast.success("File uploaded successfully");
       return {
         url: data.url,
         fileName: data.fileName
@@ -78,24 +83,29 @@ export default function LeadsPage() {
         };
       }
       
+      const formData = {
+        name,
+        email,
+        caseDescription,
+        ...(fileData ? {
+          fileUrl: fileData.url,
+          fileName: fileData.fileName
+        } : {})
+      };
+      
+      console.log("Submitting form data:", formData);
+      
       // Submit form data with file URL if available
       const response = await fetch('/api/leads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name,
-          email,
-          caseDescription,
-          ...(fileData ? {
-            fileUrl: fileData.url,
-            fileName: fileData.fileName
-          } : {})
-        }),
+        body: JSON.stringify(formData),
       });
 
       const data = await response.json();
+      console.log("API response:", data);
 
       if (response.ok) {
         toast.success("Your information has been submitted successfully");
@@ -114,6 +124,7 @@ export default function LeadsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      console.log("File selected:", selectedFile.name);
       setFile(selectedFile);
       setFileName(selectedFile.name);
       setFileUrl(null); // Reset file URL when a new file is selected
@@ -191,7 +202,7 @@ export default function LeadsPage() {
 
               <div className="space-y-2">
                 <label htmlFor="agreement" className="block text-sm font-medium text-gray-700">
-                  Supporting Documents
+                  Supporting Documents (Aggrement)
                 </label>
                 <div className="border border-gray-200 rounded-md p-10 text-center bg-gray-50">
                   {fileName ? (

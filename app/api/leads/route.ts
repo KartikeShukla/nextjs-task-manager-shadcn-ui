@@ -1,53 +1,71 @@
-import Airtable from 'airtable';
 import { NextResponse } from 'next/server';
+import Airtable from 'airtable';
 
 // Configure Airtable
-const base = new Airtable({
-  apiKey: process.env.AIRTABLE_ACCESS_TOKEN,
-}).base(process.env.AIRTABLE_BASE_ID as string);
+Airtable.configure({
+  apiKey: process.env.AIRTABLE_API_KEY,
+});
 
-const table = base(process.env.AIRTABLE_TABLE_NAME as string);
+const base = Airtable.base(process.env.AIRTABLE_BASE_ID || '');
+const table = base.table('Leads');
 
 export async function POST(request: Request) {
   try {
     const { name, email, caseDescription, fileUrl, fileName } = await request.json();
+    
+    console.log('Received form data:', { name, email, caseDescription, fileUrl, fileName });
 
     // Validate required fields
     if (!name || !email) {
       return NextResponse.json(
-        { error: 'Name and email are required fields' },
+        { error: 'Name and email are required' },
         { status: 400 }
       );
     }
 
     // Prepare record data
-    const recordData: any = {
+    const recordData: Record<string, any> = {
       'Name': name,
       'Email': email,
-      'Case Description': caseDescription || '',
     };
 
+    // Add optional fields if provided
+    if (caseDescription) {
+      recordData['Case Description'] = caseDescription;
+    }
+
     // Add file attachment if provided
-    if (fileUrl && fileName) {
+    if (fileUrl) {
+      console.log('Adding attachment to Aggrement field:', { url: fileUrl, filename: fileName || 'document.pdf' });
+      
       recordData['Aggrement'] = [
         {
           url: fileUrl,
-          filename: fileName
+          filename: fileName || 'document.pdf'
         }
       ];
     }
 
-    // Create a record in Airtable with exact field names
-    const createdRecord = await table.create(recordData);
+    console.log('Sending to Airtable:', recordData);
 
-    return NextResponse.json({ 
-      success: true, 
+    // Create record in Airtable
+    const createdRecord = await table.create(recordData);
+    
+    console.log('Airtable response:', createdRecord);
+
+    return NextResponse.json({
+      success: true,
       message: 'Lead submitted successfully'
-    }, { status: 201 });
+    });
   } catch (error) {
-    console.error('Error submitting to Airtable:', error);
+    console.error('Error creating record:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorDetails = error instanceof Error ? error.stack : '';
+    
+    console.error('Error details:', errorDetails);
+    
     return NextResponse.json(
-      { error: 'Failed to submit form to Airtable' },
+      { error: 'Failed to submit lead', details: errorMessage },
       { status: 500 }
     );
   }
